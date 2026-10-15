@@ -27,7 +27,13 @@ resize_swapchain(mvGraphics& graphics, int width, int height)
 void
 cleanup_graphics(mvGraphics& graphics)
 {
-
+    // The OpenGL renderer backend is initialized in setup_graphics() above, so
+    // this is where it has to be released.  It must run while the GLFW window -
+    // and with it the GL context that owns the shaders and buffers - is still
+    // alive, which is why destroy_context() calls cleanup_graphics() before
+    // mvCleanupViewport().
+    if (mvRendererBackendInitialized())
+        ImGui_ImplOpenGL3_Shutdown();
 }
 
 void

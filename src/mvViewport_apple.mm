@@ -51,13 +51,37 @@ glfw_error_callback(int error, const char *description)
 mvCleanupViewport(mvViewport& viewport)
 {
     auto viewportData = (mvViewportData*)viewport.platformSpecifics;
+    if (viewportData == nullptr)
+        return;
 
-    // Cleanup
-    ImGui_ImplMetal_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
+    if (GContext != nullptr)
+        StopRendering();
 
-    glfwDestroyWindow(viewportData->handle);
+    // The GLFW window and the platform backend only exist once mvShowViewport()
+    // has run.  A viewport that was created but never shown has neither.
+    if (viewportData->handle != nullptr)
+    {
+        // Platform backend first, while the window is still around: it restores
+        // the GLFW callbacks it chained itself onto.
+        if (mvPlatformBackendInitialized())
+            ImGui_ImplGlfw_Shutdown();
+
+        // This is the call that makes the window go away.  GLFW only sets a
+        // "should close" flag when the user clicks the X, so without this the
+        // window stays on screen - and, once nothing polls its events any more,
+        // frozen - until the process itself exits (#2173, #2662).
+        glfwDestroyWindow(viewportData->handle);
+        viewportData->handle = nullptr;
+    }
+
+    // A no-op if GLFW was never initialized.  It has to run so that a later
+    // create_context()/show_viewport() cycle in the same process can glfwInit()
+    // again.
     glfwTerminate();
+
+    // The renderer backend (Metal) is released by cleanup_graphics(), which
+    // destroy_context() calls before we get here.
+    viewportData->layer = nil;
 
     delete viewportData;
     viewport.platformSpecifics = nullptr;

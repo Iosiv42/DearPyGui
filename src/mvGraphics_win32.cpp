@@ -132,7 +132,18 @@ cleanup_graphics(mvGraphics& graphics)
 {
 	mvGraphics_D3D11* graphicsData = (mvGraphics_D3D11*)graphics.backendSpecifics;
 
-	ImGui_ImplDX11_Shutdown();
+	// Nothing was ever set up - the viewport was created but never shown.
+	if (graphicsData == nullptr)
+		return;
+
+	// Clear the pointer before releasing anything below.  mvHandleMsg() reads it
+	// on WM_SIZE to decide whether the swap chain is still resizable, and both
+	// ImGui_ImplDX11_Shutdown() (via ImGui::DestroyPlatformWindows()) and the
+	// DestroyWindow() that follows can dispatch window messages.
+	graphics.backendSpecifics = nullptr;
+
+	if (mvRendererBackendInitialized())
+		ImGui_ImplDX11_Shutdown();
 
 	if (graphicsData->target)
 	{
@@ -165,8 +176,6 @@ cleanup_graphics(mvGraphics& graphics)
 	}
 
 	delete graphicsData;
-	graphicsData = nullptr;
-
 }
 
 void

@@ -2625,6 +2625,26 @@ destroy_context(PyObject* self, PyObject* args, PyObject* kwargs)
 			mvToolManager::Reset();
 			ClearItemRegistry(*GContext->itemRegistry);
 
+			// Tear the viewport down *before* the ImGui context goes away.
+			//
+			// This is what actually destroys the OS window (::DestroyWindow() on
+			// Windows, glfwDestroyWindow()/glfwTerminate() on Linux and macOS) and
+			// shuts the platform/renderer backends down, all of which still need a
+			// live ImGui context to do so.  Skipping it leaves the native window on
+			// screen with nobody pumping its event queue: it goes "Not Responding"
+			// and lingers until the whole Python process exits, which is invisible
+			// in a normal script but very visible in a REPL or an embedded
+			// interpreter (#2173, #2662).
+			//
+			// The renderer is released first, then the platform layer - the order
+			// Dear ImGui itself uses.  Both calls are idempotent, so this is safe
+			// even when create_viewport() was never followed by show_viewport().
+			if (GContext->viewport)
+			{
+				cleanup_graphics(GContext->graphics);
+				mvCleanupViewport(*GContext->viewport);
+			}
+
 			ImNodes::DestroyContext();
 			ImPlot::DestroyContext();
 			ImGui::DestroyContext();

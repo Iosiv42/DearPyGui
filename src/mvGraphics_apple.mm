@@ -42,7 +42,25 @@ resize_swapchain(mvGraphics &graphics, int width, int height)
 void
 cleanup_graphics(mvGraphics &graphics)
 {
+    auto graphicsData = (mvGraphics_Metal*)graphics.backendSpecifics;
 
+    // Nothing was ever set up - the viewport was created but never shown.
+    if (graphicsData == nullptr)
+        return;
+
+    graphics.backendSpecifics = nullptr;
+
+    // The Metal renderer backend is initialized in setup_graphics() above, so it
+    // is released here.  It has to run while the CAMetalLayer that belongs to the
+    // GLFW window is still around, i.e. before mvCleanupViewport().
+    if (mvRendererBackendInitialized())
+        ImGui_ImplMetal_Shutdown();
+
+    graphicsData->renderPassDescriptor = nil;
+    graphicsData->commandQueue = nil;
+    graphicsData->device = nil;
+
+    delete graphicsData;
 }
 
 void

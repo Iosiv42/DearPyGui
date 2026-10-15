@@ -20,9 +20,12 @@
 struct mvViewportData
 {
 	HWND       handle = nullptr;
-	WNDCLASSEX wc;
-	MSG        msg;
-	DWORD      modes;
+	// Zero-initialised on purpose: the window class is only filled in (and only
+	// registered) by mvShowViewport(), and mvCleanupViewport() uses
+	// wc.lpszClassName to tell whether there is a class left to unregister.
+	WNDCLASSEX wc = {};
+	MSG        msg = {};
+	DWORD      modes = 0;
 };
 
 struct mvGraphics_D3D11

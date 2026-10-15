@@ -451,9 +451,47 @@ void
 mvCleanupViewport(mvViewport& viewport)
 {
 	mvViewportData* viewportData = (mvViewportData*)viewport.platformSpecifics;
-	ImGui_ImplWin32_Shutdown();
-	::DestroyWindow(viewportData->handle);
-	::UnregisterClass(viewportData->wc.lpszClassName, viewportData->wc.hInstance);
+	if (viewportData == nullptr)
+		return;
+
+	// Everything below only exists once mvShowViewport() has run - that is where
+	// the window class is registered, the HWND is created and the Win32 backend
+	// is initialized.  A viewport that was created but never shown has none of
+	// them, and there is nothing to tear down.
+	if (viewportData->handle != nullptr)
+	{
+		// Shut the backend down while the ImGui context is still alive; it needs
+		// it (and it also destroys any secondary windows ImGui created for us).
+		if (mvPlatformBackendInitialized())
+			ImGui_ImplWin32_Shutdown();
+
+		// This is the call that makes the window actually go away.  Without it the
+		// HWND outlives destroy_context() with nobody left to pump its messages,
+		// so Windows flags it "Not Responding" and it stays on screen until the
+		// process itself exits (#2173, #2662).
+		::DestroyWindow(viewportData->handle);
+		viewportData->handle = nullptr;
+
+		// WM_QUIT is posted to the *thread* queue by the WM_CLOSE handler above, so
+		// unlike the window messages it outlives the HWND.  Consume it here: a
+		// leftover WM_QUIT would be picked up by the first PeekMessage of the next
+		// context created in this process and would make it quit immediately.
+		// The filter keeps us from touching messages that belong to other windows
+		// this thread may own.
+		MSG quitMsg;
+		::PeekMessage(&quitMsg, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE);
+	}
+
+	// Registered in mvShowViewport(); UnregisterClass fails while any window of
+	// the class is still alive, which is why it comes after DestroyWindow above.
+	if (viewportData->wc.lpszClassName != nullptr)
+	{
+		::UnregisterClass(viewportData->wc.lpszClassName, viewportData->wc.hInstance);
+		viewportData->wc.lpszClassName = nullptr;
+	}
+
+	delete viewportData;
+	viewport.platformSpecifics = nullptr;
 }
 
 void
